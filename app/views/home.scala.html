@@ -85,13 +85,14 @@
     
     <!--TEXT BOX-->
     <div class = "OMC_post_wrapper">
-            <form method = "post" action = "/home/post" style = "width:100%; height:100%">
+            <form id = "myform" method = "post" action = "/submitPost" style = "width:100%; height:100%">
                 <div class = "OMC_post_input" style = "width:100%; height:100%;">
                     <input 
                     type = "text" 
                     style = "position: absolute; right:25%; margin-right:-25%; width: 100%; height: 60%; top: 5%" 
-                    name = "user_post">
+                    name = "post">
                     <br>
+                    <input type = "text" name = "test" value = "hi" hidden>
                     <input 
                     type = "submit" 
                     style = "position: absolute; right:25%; margin-right:-25%; width: 100%; bottom: 0;" 
@@ -113,7 +114,19 @@
                 console.log($(this))
                 $('#' + panelid).toggle();
             } );
-
+            // $('#submit_post').click(function(){
+              
+            //     var formData = JSON.stringify($("#myform").serializeArray());
+            //       console.log(formData);
+            //     $.ajax({
+            //         type: "POST",
+            //         url: '@routes.HomeController.submitPost().url',
+            //         data: formData,
+            //         success: function(){},
+            //         dataType: "json"
+            //     });
+            // })
+            
             initialise();
 
             $(window).scroll(function() {
