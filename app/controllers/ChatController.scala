@@ -34,26 +34,28 @@ import akka.stream.OverflowStrategy
 sealed trait Msg
 case class AcknowledgeCon(username: String, user: ActorRef) extends Msg
 case class Connected(outgoing: ActorRef)
-case class Send(msg: String) extends Msg
+case class Outgoing(msg: String) extends Msg
+case class Incoming(msg: String)
 case object ReqChild extends Msg
 case object PollId extends Msg
 
 case class ChatRoomActor(roomId: Int, chatRoom: ActorRef) extends Actor {
+
     override def preStart(): Unit = {
         chatRoom ! AcknowledgeCon("Peter", self)
     }
-    println(akka.serialization.Serialization.serializedActorPath(self))
-    println(context)
     def receive: Receive = {
         case Connected(outgoing) =>
             context.become(connected(outgoing))
     }
     def connected(outgoing: ActorRef): Receive = {
-        case clientMsg: String => 
-            println("Child actor received " + clientMsg)
-            chatRoom ! Send(clientMsg)
-        case Send(msg) =>
+        case Incoming(msg) => 
+            println("Child actor received " + msg)
+            chatRoom ! Incoming(msg)
+        case Outgoing(msg) =>
+            println("Received outgoing msg " + msg)
             outgoing ! msg
+
     }
 }
 
@@ -68,22 +70,20 @@ case class ChatRoom(roomId: Int) extends Actor{
 
     var users: List[ActorRef] = List()
     val id = roomId.toString()
-    println(akka.serialization.Serialization.serializedActorPath(self))
+    println("PATH:" + akka.serialization.Serialization.serializedActorPath(self))
     def connectUser(user: ActorRef) = {
         users = users ::: List(user)
     }
-    // def newChild() : ActorRef = context.actorOf(ChatRoomActor.props(0, self,))
+    
     def receive: Receive = {
         case ReqChild => 
-            println("GOT REQ FOR CHILD")
             val child : ActorRef = context.actorOf(ChatRoomActor.props(users.length, self))
-            connectUser(child)
             sender ! child 
         case PollId =>
             sender ! roomId
-        case Send(msg) => 
+        case Incoming(msg) => 
             println("Chatroom " + roomId + " received: " + msg)
-            users.map (u => u ! Send(msg))
+            users.map (u => u ! Outgoing(msg))
         case AcknowledgeCon(username, user) =>
             connectUser(user)
             println("New connection: " + username + " : " + users)
@@ -107,7 +107,6 @@ class ChatController @Inject()(cc: ControllerComponents)
 
     //temporary stateful
     implicit val timeout : Timeout = Timeout(5, TimeUnit.SECONDS)
-    val controller : ActorRef = actorSystem.actorOf(ChatRoom.props(0), name = "Chatroom:0")
 
     // // // 
     def retrieveChatRoom(id: Int) = { 
@@ -121,31 +120,26 @@ class ChatController @Inject()(cc: ControllerComponents)
         request =>
         //Retrieve existing chatroom, or create new one
         implicit val timeout = Timeout(5 seconds)
-        val select = actorSystem.actorSelection("/user/Chatroom:1")
+        val select = actorSystem.actorSelection("/user/Chatroom:" + id)
         val asker = new AskableActorSelection(select);
         val fut  = asker.ask(Identify(1))
         val identity =  Await.result(fut, timeout.duration).asInstanceOf[ActorIdentity]
         val res = identity.getRef
-        val chatRoom: ActorRef = 
-            if(res == null)
-                actorSystem.actorOf(ChatRoom.props(id), id.toString)
-            else 
-                res
-            
+        val chatRoom: ActorRef = if(res == null) {actorSystem.actorOf(ChatRoom.props(id), "Chatroom:" + id.toString)} else res
+
         //Wait for it to provide us a child actor ref
         val future : Future[Any] = chatRoom ? ReqChild
         val child = Await.result(future, timeout.duration).asInstanceOf[ActorRef]
-        println("Result child actor ref is " + child)
         
         //Create flow towards child actor
-        val in = Sink.foreach[String](s => child ! s)
+        val in = Sink.foreach[String](s => child ! Incoming(s))
         val out: Source[String, NotUsed] =
         Source.actorRef[String](10, OverflowStrategy.fail)
         .mapMaterializedValue{
             outActor => child ! Connected(outActor)
             NotUsed
         }
-        .map( outMsg => "sending" + outMsg)
+        .map( outMsg => outMsg)
 
         Flow.fromSinkAndSource(in, out)
 

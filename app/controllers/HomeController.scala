@@ -12,7 +12,7 @@ import models.IndexModel
 import models.PostInsert
 import models.PostRequest
 import models.Post
-
+import play.api.libs.json._
 @Singleton
 class HomeController @Inject()(db: Database) extends Controller{
   import play.api.libs.json._
@@ -24,7 +24,7 @@ class HomeController @Inject()(db: Database) extends Controller{
   def getPost() = Action { implicit request: Request[AnyContent] =>
     val body : PostRequest = PostRequest.postRequest.bindFromRequest.get
     val post : Option[Post] = index_model.selectPost(body)
-    Ok("got : " + post)
+    Ok(post.toString())
   }
 
   def submitPost() = Action { implicit request: Request[AnyContent] =>

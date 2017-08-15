@@ -23,8 +23,8 @@
         top: 25%;
         z-index: 5;
         left: 50%;
-        width: 50%;
-        height: 50%;
+        width: 600px;
+        height: 300px;
         background-color: yellow;
         border: 2px solid black;
         

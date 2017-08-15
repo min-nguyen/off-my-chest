@@ -90,8 +90,14 @@ function togglePeekBox(popup_dom){
     else{
         $(".OMC_peek_box").css({left: offset_and_width, top: offset.top});
         $(".OMC_peek_box").slideToggle();
+        newConnection(popup_dom);
     }
     $(".OMC_peek_box").attr('data-cell-id', cell_id);
+}
+
+function newConnection(popup_dom){
+    var connection_id = $(popup_dom).attr('data-connection-id')
+    $('#connection').attr('src', './chat/' + connection_id)
 }
 
 //Creates 1 row with 10 empty column cells
@@ -112,8 +118,8 @@ function createColumns(row_num, start_entry){
         var col_width =  Math.floor(Math.random()*(12-8+1)+8);
         var color   =  colors[Math.floor(Math.random()*(2-0+1)+0)];
         var entry = i + start_entry;
-        if((row_width + 12) > 100){
-            col_width = 100 - (row_width);
+        if((row_width + 12 + 1) > 100){
+            col_width = (100 - (row_width + 4))
             cols += ("<div class = 'col-cell' id = row-" + row_num + "-col-" + i + 
                      " style = 'width:" + col_width + "%; background-color:" + color + " '>"
                         + "<div class = 'cell-text' data-entry = '" + entry + "' >  </div>" + "</div>");
@@ -158,8 +164,15 @@ function getPost(cell_id){
         data: {entry : post_entry}, 
         type: "POST",
         success: function(data_){
-            console.log(data_);
-            //insertPost(cell_id, data_);
+           var reg = /(.*)\(Post\((.*),(.*),(.*)\)\)/;
+           var arr = data_.match(reg)
+           if(arr != null){
+            var post = arr[2];
+            var id = arr[3];
+            var date = arr[4];
+            (cell_text_obj.siblings('.popup')).attr('data-connection-id', id)
+            cell_text_obj.text(post)
+           }
         }
     });
 }
