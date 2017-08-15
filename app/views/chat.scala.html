@@ -15,8 +15,6 @@
             <input type="text" id="send-text" style = "position: relative; width: 80%">
             <button id="send" type="submit" class="btn btn-primary btn-lg btn-block">Send</button>
         </div>
-
-
     <script type='text/javascript' src='@routes.Assets.versioned("javascripts/chat.js")'></script>
     <script type='text/javascript' src='@routes.Assets.versioned("javascripts/jquery.js")'></script>
     <script>
@@ -24,9 +22,8 @@
         url = $('#socket').attr('data-url')
         var connection = new WebSocket(url);
         var $send = $("#send"); 
-        var $message = $("#message"); 
         connection.onopen = function() {
-            console.log("open")
+            console.log("Connection succesful at " + url);
             $send.on('click', function() {
                 connection.send($('#send-text').val());
                 $('#send-text').val('');
@@ -47,7 +44,6 @@
             console.log("Connection closed")
         }
       })
-      
     </script>
     </body>
 </html>

@@ -22,16 +22,33 @@ class HomeController @Inject()(db: Database) extends Controller{
     Ok(views.html.home())
   }
   def getPost() = Action { implicit request: Request[AnyContent] =>
-    val body : PostRequest = PostRequest.postRequest.bindFromRequest.get
+    val body : PostRequest = PostRequest.postRequest.bindFromRequest.fold(
+      formWithErrors => {
+        PostRequest(0)
+      },
+      userData => {
+        PostRequest.postRequest.bindFromRequest.get
+      }
+    )
     val post : Option[Post] = index_model.selectPost(body)
     Ok(post.toString())
+   
   }
 
   def submitPost() = Action { implicit request: Request[AnyContent] =>
-    val body : PostInsert = PostInsert.post.bindFromRequest.get
-    println("PostInsert submitted: " + body)
-    index_model.insertPost(body);
-    Ok("username: '${body}'")
+    val body : Option[PostInsert] = PostInsert.post.bindFromRequest.fold(
+      formWithErrors => {
+        None
+      },
+      userData => {
+          Some(PostInsert.post.bindFromRequest.get)
+      }
+    )
+    val insert = body match{
+      case None => 
+      case Some(x) => if (x.post != "") index_model.insertPost(x) 
+    }
+    Redirect("/home")
   }
 }
 

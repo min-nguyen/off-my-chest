@@ -50,7 +50,7 @@
                     <input 
                     type = "text" 
                     style = "position: absolute; right:25%; margin-right:-25%; width: 100%; height: 60%; top: 5%" 
-                    name = "post">
+                    name = "post" >
                     <br>
                     <input type = "number" name = "test" value = "5" hidden>
                     <input 
@@ -74,17 +74,17 @@
                 console.log($(this))
                 $('#' + panelid).toggle();
             } );
-            // $('#submit_post').click(function(){
-            //     var formData = JSON.stringify($("#myform").serializeArray());
-            //       console.log(formData);
-            //     $.ajax({
-            //         type: "POST",
-            //         url: '@routes.HomeController.submitPost().url',
-            //         data: formData,
-            //         success: function(){},
-            //         dataType: "json"
-            //     });
-            // })
+            $('#submit_post').click(function(){
+                var formData = JSON.stringify($("#myform").serializeArray());
+                  console.log(formData);
+                $.ajax({
+                    type: "POST",
+                    url: '@routes.HomeController.submitPost().url',
+                    data: formData,
+                    success: function(){},
+                    dataType: "json"
+                });
+            })
             
             initialise();
 

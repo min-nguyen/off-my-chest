@@ -170,7 +170,7 @@ function getPost(cell_id){
         success: function(data_){
             var reg = /(.*)\(Post\((.*),(.*),(.*)\)\)/;
             var arr = data_.match(reg)
-            if(arr != null){
+            if(arr != null && arr.length > 4){
                 var post = arr[2];
                 var id = arr[3];
                 var date = arr[4];
