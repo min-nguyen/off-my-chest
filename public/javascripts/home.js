@@ -1,9 +1,8 @@
 var xmlhttp = new XMLHttpRequest();
 
-function div_width(){
-var wd = $("#row-0-col-0").width();
-    console.log(wd);
-}
+
+//
+
 
 function getTextWidth(text, font) {
     // re-use canvas object for better performance
@@ -17,7 +16,7 @@ function getTextWidth(text, font) {
 function initialise(){
     // Create Rows
     var rows = "";
-    var num_of_rows = 5;
+    var num_of_rows = 10;
     for(j = 0; j < num_of_rows; j++){
         var row = createRow(j, j*10);
         rows += row;
@@ -56,13 +55,12 @@ function refreshFunctions(){
     });
 }
 
-// PEEK BOX
+// Aligns chat box with correspond cell when window resizes
 function resizePeekBox() {
     var location = $(".OMC_peek_box").offset();
     var cell_id = $(".OMC_peek_box").attr('data-cell-id');
     var width  = $('#' + cell_id).width();
     var cell_offset = $("#" + cell_id).offset();
-    console.log(cell_offset);
     var left_offset = parseInt(cell_offset.left) + parseInt(width);
     var top_offset  = cell_offset.top;
     
@@ -70,7 +68,7 @@ function resizePeekBox() {
     });
 }
 
-// TOGGLE PEEK BOX
+// Toggles chat box and calls for a new socket connection if necessary
 function togglePeekBox(popup_dom){
     var offset = $(popup_dom).offset();
     var width  = $(popup_dom).width();
@@ -90,21 +88,27 @@ function togglePeekBox(popup_dom){
     else{
         $(".OMC_peek_box").css({left: offset_and_width, top: offset.top});
         $(".OMC_peek_box").slideToggle();
+        $()
         newConnection(popup_dom);
     }
     $(".OMC_peek_box").attr('data-cell-id', cell_id);
 }
 
+//Changes iframe src websocket connection
 function newConnection(popup_dom){
     var connection_id = $(popup_dom).attr('data-connection-id')
+    if(connection_id == undefined){
+        console.log("Post here is null: No socket connection exists")
+        return;
+    }
     $('#connection').attr('src', './chat/' + connection_id)
 }
 
 //Creates 1 row with 10 empty column cells
 function createRow(row_num, start_entry){
     return ("<div class = 'row-cell' id = row" + row_num + ">" +
-        createColumns(row_num, start_entry) +
-        "</div>");
+                createColumns(row_num, start_entry) +
+            "</div>");
 }
 
 //Creates 10 cells in a row and initialises data-entry
@@ -164,19 +168,20 @@ function getPost(cell_id){
         data: {entry : post_entry}, 
         type: "POST",
         success: function(data_){
-           var reg = /(.*)\(Post\((.*),(.*),(.*)\)\)/;
-           var arr = data_.match(reg)
-           if(arr != null){
-            var post = arr[2];
-            var id = arr[3];
-            var date = arr[4];
-            (cell_text_obj.siblings('.popup')).attr('data-connection-id', id)
-            cell_text_obj.text(post)
-           }
+            var reg = /(.*)\(Post\((.*),(.*),(.*)\)\)/;
+            var arr = data_.match(reg)
+            if(arr != null){
+                var post = arr[2];
+                var id = arr[3];
+                var date = arr[4];
+                (cell_text_obj.siblings('.popup')).attr('data-connection-id', id);
+                insertPost(cell_id, post);
+            }
         }
     });
 }
 
+//Fits text to cell text element
 function insertPost(cell_id, text){
     var cell = $("#" + cell_id);
     var cell_text = $("#" + cell_id).children(".cell-text");

@@ -21,35 +21,31 @@
     <script type='text/javascript' src='@routes.Assets.versioned("javascripts/jquery.js")'></script>
     <script>
       $(document).ready(function(){
-          url = $('#socket').attr('data-url')
-          console.log(url)
-          var connection = new WebSocket(url);
-          var $send = $("#send"); 
-          var $message = $("#message"); 
-          connection.onopen = function() {
-                console.log("open")
-                $send.on('click', function() {
-                    connection.send($('#send-text').val());
-                    $('#send-text').val('');
-                });
-            };
+        url = $('#socket').attr('data-url')
+        var connection = new WebSocket(url);
+        var $send = $("#send"); 
+        var $message = $("#message"); 
+        connection.onopen = function() {
+            console.log("open")
+            $send.on('click', function() {
+                connection.send($('#send-text').val());
+                $('#send-text').val('');
+            });
             connection.onmessage = function(event) {
-                console.log(event.data);
-                $('#chatbox').append('<div>' + event.data + '</div>')
-                $('#chatbox').stop ().animate ({
-                    scrollTop: $('#chatbox')[0].scrollHeight
-                });
+            console.log(event.data);
+            $('#chatbox').append('<div>' + event.data + '</div>')
+            $('#chatbox').stop ().animate ({
+                scrollTop: $('#chatbox')[0].scrollHeight
+            });
             }
-              // $send.prop("disabled", false);
-              // $messages
-              //     .prepend($("<li class='bg-info' style='font-size: 1.5em'>Connected</li>"));
-              // $send.on('click', send);
-              // $message.keypress(function(event) {
-              //   var keycode = (event.keyCode ? event.keyCode : event.which);
-              //   if (keycode == '13') {
-              //     send();
-              //   }
-              // });
+        };
+        //not used yet
+        function close(){
+            connection.close();
+        }
+        connection.onclose = function(){
+            console.log("Connection closed")
+        }
       })
       
     </script>
