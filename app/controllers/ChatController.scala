@@ -30,33 +30,20 @@ import scala.concurrent.ExecutionContext.Implicits.global
 import scala.util.{Success, Failure}
 import akka.stream.OverflowStrategy
 
-case class SocketActor(out: ActorRef) extends Actor {
-    //Actor instance receives message
-    def receive = {
-        case msg: String => {
-            println("hi")
-            out ! ("Message: " + msg)}
-    }
-}
 
-case object SocketActor{
-    //Create actor
-    def props(out: ActorRef) = {
-        Props(new SocketActor(out))
-    }
-}
-
-case class User(chatRoom: ActorRef) extends Actor{
-    def receive = {
-        case msg: String => chatRoom ! msg
-    }
-}
+sealed trait Msg
+case class AcknowledgeCon(username: String, user: ActorRef) extends Msg
+case class Connected(outgoing: ActorRef)
+case class Send(msg: String) extends Msg
+case object ReqChild extends Msg
+case object PollId extends Msg
 
 case class ChatRoomActor(roomId: Int, chatRoom: ActorRef) extends Actor {
     override def preStart(): Unit = {
-        chatRoom ! Connect("Peter", self)
+        chatRoom ! AcknowledgeCon("Peter", self)
     }
     println(akka.serialization.Serialization.serializedActorPath(self))
+    println(context)
     def receive: Receive = {
         case Connected(outgoing) =>
             context.become(connected(outgoing))
@@ -64,8 +51,9 @@ case class ChatRoomActor(roomId: Int, chatRoom: ActorRef) extends Actor {
     def connected(outgoing: ActorRef): Receive = {
         case clientMsg: String => 
             println("Child actor received " + clientMsg)
-            outgoing ! "Y"
             chatRoom ! Send(clientMsg)
+        case Send(msg) =>
+            outgoing ! msg
     }
 }
 
@@ -75,12 +63,6 @@ case object ChatRoomActor{
     }
 }
 
-sealed trait Msg
-case class Connect(username: String, user: ActorRef) extends Msg
-case class Connected(outgoing: ActorRef)
-case class Send(msg: String) extends Msg
-case object ReqChild extends Msg
-case object PollId extends Msg
 
 case class ChatRoom(roomId: Int) extends Actor{
 
@@ -93,14 +75,16 @@ case class ChatRoom(roomId: Int) extends Actor{
     // def newChild() : ActorRef = context.actorOf(ChatRoomActor.props(0, self,))
     def receive: Receive = {
         case ReqChild => 
+            println("GOT REQ FOR CHILD")
             val child : ActorRef = context.actorOf(ChatRoomActor.props(users.length, self))
+            connectUser(child)
             sender ! child 
         case PollId =>
             sender ! roomId
         case Send(msg) => 
             println("Chatroom " + roomId + " received: " + msg)
             users.map (u => u ! Send(msg))
-        case Connect(username, user) =>
+        case AcknowledgeCon(username, user) =>
             connectUser(user)
             println("New connection: " + username + " : " + users)
         case msg => 
@@ -122,32 +106,38 @@ class ChatController @Inject()(cc: ControllerComponents)
                                mat: Materializer) extends Controller{
 
     //temporary stateful
-
+    implicit val timeout : Timeout = Timeout(5, TimeUnit.SECONDS)
     val controller : ActorRef = actorSystem.actorOf(ChatRoom.props(0), name = "Chatroom:0")
 
     // // // 
-    def retrieveChatRoom(id: Int) = {
-       
-        implicit val timeout : Timeout = Timeout(5, TimeUnit.SECONDS)
-        val fute = actorSystem.actorSelection("/user/yes").resolveOne().onComplete {
-            // result => println(result)
-            case Success(actor) => println(actor)
-            case Failure(ex) => 
-                // val actor = system.actorOf(Props(classOf[ActorClass]), name)
-                // actor ! message
+    def retrieveChatRoom(id: Int) = { 
+        actorSystem.actorSelection("/user/Chatroom:"+id).resolveOne().onComplete {
+            case Success(actor) => println("returning" + actor); actor
+            case Failure(ex) => actorSystem.actorOf(ChatRoom.props(id), name = "Chatroom:" + id)
         }
     }
 
     def socket(id: Int) : WebSocket = WebSocket.accept[String, String] {
-        request => println(request);
-        //New chatroom
-        val chatRoom : ActorRef = actorSystem.actorOf(ChatRoom.props(id), id.toString)
-        //Wait for it to provide us a child actor ref
+        request =>
+        //Retrieve existing chatroom, or create new one
         implicit val timeout = Timeout(5 seconds)
+        val select = actorSystem.actorSelection("/user/Chatroom:1")
+        val asker = new AskableActorSelection(select);
+        val fut  = asker.ask(Identify(1))
+        val identity =  Await.result(fut, timeout.duration).asInstanceOf[ActorIdentity]
+        val res = identity.getRef
+        val chatRoom: ActorRef = 
+            if(res == null)
+                actorSystem.actorOf(ChatRoom.props(id), id.toString)
+            else 
+                res
+            
+        //Wait for it to provide us a child actor ref
         val future : Future[Any] = chatRoom ? ReqChild
         val child = Await.result(future, timeout.duration).asInstanceOf[ActorRef]
         println("Result child actor ref is " + child)
         
+        //Create flow towards child actor
         val in = Sink.foreach[String](s => child ! s)
         val out: Source[String, NotUsed] =
         Source.actorRef[String](10, OverflowStrategy.fail)
@@ -158,12 +148,13 @@ class ChatController @Inject()(cc: ControllerComponents)
         .map( outMsg => "sending" + outMsg)
 
         Flow.fromSinkAndSource(in, out)
+
     }
+
     def index(id: Int) = Action { implicit request: Request[AnyContent] =>
         val socket = routes.ChatController.socket(id)
         val url = socket.webSocketURL()
         println(url)
-        retrieveChatRoom(0)
         Ok(views.html.chat(url))
     }
 }
