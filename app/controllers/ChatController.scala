@@ -58,12 +58,15 @@ case class ChatRoomActor(roomId: Int, chatRoom: ActorRef) extends Actor {
     }
     println(akka.serialization.Serialization.serializedActorPath(self))
     def receive: Receive = {
+        case Connected(outgoing) =>
+            context.become(connected(outgoing))
+    }
+    def connected(outgoing: ActorRef): Receive = {
         case clientMsg: String => 
             println("Child actor received " + clientMsg)
-            sender ! "Y"
+            outgoing ! "Y"
             chatRoom ! Send(clientMsg)
     }
-    def connected(out: ActorRef): Receive = {}
 }
 
 case object ChatRoomActor{
@@ -74,6 +77,7 @@ case object ChatRoomActor{
 
 sealed trait Msg
 case class Connect(username: String, user: ActorRef) extends Msg
+case class Connected(outgoing: ActorRef)
 case class Send(msg: String) extends Msg
 case object ReqChild extends Msg
 case object PollId extends Msg
@@ -143,19 +147,17 @@ class ChatController @Inject()(cc: ControllerComponents)
         val future : Future[Any] = chatRoom ? ReqChild
         val child = Await.result(future, timeout.duration).asInstanceOf[ActorRef]
         println("Result child actor ref is " + child)
-        //Need to use it somehow
+        
         val in = Sink.foreach[String](s => child ! s)
-
-        //Figure out how to send messages back to client
-        val out: Source[Message, NotUsed] =
-        Source.actorRef[ChatRoomActor](10, OverflowStrategy.fail)
-        .map(
-            // transform domain message to web socket message
-            outMsg => TextMessage(outMsg.text))
-
-        Flow.fromSinkAndSource(in, out).map {
-            msg => "Received " + msg
+        val out: Source[String, NotUsed] =
+        Source.actorRef[String](10, OverflowStrategy.fail)
+        .mapMaterializedValue{
+            outActor => child ! Connected(outActor)
+            NotUsed
         }
+        .map( outMsg => "sending" + outMsg)
+
+        Flow.fromSinkAndSource(in, out)
     }
     def index(id: Int) = Action { implicit request: Request[AnyContent] =>
         val socket = routes.ChatController.socket(id)
