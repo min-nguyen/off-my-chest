@@ -1,0 +1,69 @@
+package models
+import javax.inject._
+import play.api.data._
+import play.api.data.Forms._
+import play.api._
+import play.api.mvc._
+import play.api.db._
+import java.sql.DriverManager
+import java.sql.Connection
+import java.util.Date
+import java.time.LocalDateTime
+import java.time.format.DateTimeFormatter
+import play.api.libs.json._
+case class ChatMessage(text: String, user: String, roomId: Int, time: LocalDateTime)
+case object ChatMessage{
+    def create(text: String, user: String, roomId: Int) = 
+        new ChatMessage(text, user, roomId, LocalDateTime.now())
+    implicit val msg = Json.format[ChatMessage]
+}
+
+case class ChatModel @Inject()(db: Database){
+  println("hi")
+  /** MYSQL**/
+  val conn = db.getConnection()
+  val stmt = conn.createStatement()
+
+  val results = stmt.executeQuery("USE mydb")
+  
+  val create = stmt.executeUpdate("""CREATE TABLE IF NOT EXISTS chatroom 
+                                  (text VARCHAR(255), user VARCHAR(255), 
+                                  roomId INT(11), time DATETIME, 
+                                  FOREIGN KEY (roomID) REFERENCES threads(entry))""")
+
+  def viewDB {
+    val resultSet = stmt.executeQuery("SELECT * FROM chatroom")
+    while ( resultSet.next() ) {
+          val text = resultSet.getString("text")
+          val user = resultSet.getString("user")
+          val roomId = resultSet.getInt("roomId")
+          val time = resultSet.getInt("time")
+    }
+  }
+  
+  def insertMessage(msg: ChatMessage) {
+    val stmt_insert = conn.createStatement()
+    stmt.executeUpdate("INSERT INTO chatroom (text, user, roomId, time) VALUES ('" 
+                        + msg.text + "','" + msg.user + "','" + msg.roomId + "','" + msg.time + "')")
+    stmt_insert.close()
+  }
+
+  def selectMessages(id: Int) : List[ChatMessage] = {
+    val stmt_select = conn.createStatement()
+    val resultSet = stmt_select.executeQuery("SELECT * FROM chatroom WHERE roomId = '" 
+                                            + id + "' ORDER BY time DESC") 
+  
+    var history: List[ChatMessage] = List()
+   
+    while ( resultSet.next() ) {
+        val text = resultSet.getString("text")
+        val user = resultSet.getString("user")
+        val roomId = resultSet.getInt("roomId")
+        val time = resultSet.getTimestamp("time").toLocalDateTime()
+        val chatMessage = ChatMessage(text, user, roomId, time)
+        history ::= (chatMessage)
+    }
+    history
+  }
+}
+

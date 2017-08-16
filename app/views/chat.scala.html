@@ -15,25 +15,41 @@
             <input type="text" id="send-text" style = "position: relative; width: 80%">
             <button id="send" type="submit" class="btn btn-primary btn-lg btn-block">Send</button>
         </div>
-    <script type='text/javascript' src='@routes.Assets.versioned("javascripts/chat.js")'></script>
     <script type='text/javascript' src='@routes.Assets.versioned("javascripts/jquery.js")'></script>
     <script>
       $(document).ready(function(){
         url = $('#socket').attr('data-url')
+
+        //Produced GET request to ws:localhost/chat/?id
         var connection = new WebSocket(url);
         var $send = $("#send"); 
+        var history_loaded = false;
         connection.onopen = function() {
             console.log("Connection succesful at " + url);
+
             $send.on('click', function() {
                 connection.send($('#send-text').val());
                 $('#send-text').val('');
             });
+
             connection.onmessage = function(event) {
-            console.log(event.data);
-            $('#chatbox').append('<div>' + event.data + '</div>')
-            $('#chatbox').stop ().animate ({
-                scrollTop: $('#chatbox')[0].scrollHeight
-            });
+                //Load History
+                if(!history_loaded){
+                    var history = loadHistory(event.data)
+                    for(i = 0; i < history.length; i++){
+                        $('#chatbox').append('<div>'+ history[i].user + ": " 
+                                                    + history[i].text + '</div>')
+                    }
+                    history_loaded = true;
+                }
+                //Process real-time messages
+                else{
+                    console.log(event.data);
+                    $('#chatbox').append('<div>' + event.data + '</div>')
+                    $('#chatbox').stop ().animate ({
+                        scrollTop: $('#chatbox')[0].scrollHeight
+                    });
+                }
             }
         };
         //not used yet
@@ -42,6 +58,15 @@
         }
         connection.onclose = function(){
             console.log("Connection closed")
+        }
+
+        function loadHistory(event_data){
+            try {
+                var history = JSON.parse(event_data)
+                return history
+            } catch (e){
+                return [];
+            }
         }
       })
     </script>
