@@ -7,67 +7,24 @@
   <body>
         <div id = 'socket' data-url = @socketURL></div>
         
-        <div id = 'chatbox' style = "position: fixed; left: 0%; width: 100%; height: 75%; background-color: white; overflow: auto">
+        <div id = 'chatbox' style = "position: fixed; left: 0%; width: 75%; height: 75%; background-color: white; overflow: auto">
             
         </div>
 
-        <div style = "position: fixed; bottom: 0; left:0; width: 100%; height: 15%; margin-bottom: 3px; text-align: center">
+        <div style = "position: fixed; bottom: 0; left:0; width: 75%; height: 15%; margin-bottom: 3px; text-align: center">
             <input type="text" id="send-text" style = "position: relative; width: 80%">
             <button id="send" type="submit" class="btn btn-primary btn-lg btn-block">Send</button>
         </div>
+        <div style = "position: absolute; bottom: 0; right:0; width: 25%; height: 100%; background-color:grey; border: 2px solid black">
+            
+        </div>
+
     <script type='text/javascript' src='@routes.Assets.versioned("javascripts/jquery.js")'></script>
+    <script type='text/javascript' src='@routes.Assets.versioned("javascripts/chat.js")'></script>
+    
     <script>
       $(document).ready(function(){
-        url = $('#socket').attr('data-url')
-
-        //Produced GET request to ws:localhost/chat/?id
-        var connection = new WebSocket(url);
-        var $send = $("#send"); 
-        var history_loaded = false;
-        connection.onopen = function() {
-            console.log("Connection succesful at " + url);
-
-            $send.on('click', function() {
-                connection.send($('#send-text').val());
-                $('#send-text').val('');
-            });
-
-            connection.onmessage = function(event) {
-                //Load History
-                if(!history_loaded){
-                    var history = loadHistory(event.data)
-                    for(i = 0; i < history.length; i++){
-                        $('#chatbox').append('<div>'+ history[i].user + ": " 
-                                                    + history[i].text + '</div>')
-                    }
-                    history_loaded = true;
-                }
-                //Process real-time messages
-                else{
-                    console.log(event.data);
-                    $('#chatbox').append('<div>' + event.data + '</div>')
-                    $('#chatbox').stop ().animate ({
-                        scrollTop: $('#chatbox')[0].scrollHeight
-                    });
-                }
-            }
-        };
-        //not used yet
-        function close(){
-            connection.close();
-        }
-        connection.onclose = function(){
-            console.log("Connection closed")
-        }
-
-        function loadHistory(event_data){
-            try {
-                var history = JSON.parse(event_data)
-                return history
-            } catch (e){
-                return [];
-            }
-        }
+          var websocket = ws()
       })
     </script>
     </body>

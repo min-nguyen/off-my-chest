@@ -75,20 +75,23 @@ function togglePeekBox(popup_dom){
     var cell_id  = $(popup_dom).parent(".col-cell").attr('id'); 
     var offset_and_width = parseInt(offset.left) + parseInt(width);
     if ($(".OMC_peek_box").is(":visible")){
+        //Hide chat window
         if($(".OMC_peek_box").offset().left == offset_and_width)
             $(".OMC_peek_box").slideToggle();
+        //New Connection
         else{
             $(".OMC_peek_box").slideToggle(function(){
                 $(".OMC_peek_box").css({left: offset_and_width, top: offset.top});
             });
-            
             $(".OMC_peek_box").slideToggle();
+            newConnection(popup_dom);
         }
     }
     else{
+        //New Connection
         $(".OMC_peek_box").css({left: offset_and_width, top: offset.top});
         $(".OMC_peek_box").slideToggle();
-        $()
+        
         newConnection(popup_dom);
     }
     $(".OMC_peek_box").attr('data-cell-id', cell_id);
@@ -96,12 +99,16 @@ function togglePeekBox(popup_dom){
 
 //Changes iframe src websocket connection
 function newConnection(popup_dom){
+    
     var connection_id = $(popup_dom).attr('data-connection-id')
     if(connection_id == undefined){
         console.log("Post here is null: No socket connection exists")
         return;
     }
+
+    $('#post_title').text(($(popup_dom).siblings('.cell-text')).text())
     $('#connection').attr('src', './chat/' + connection_id)
+
 }
 
 //Creates 1 row with 10 empty column cells
