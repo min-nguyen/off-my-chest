@@ -7,6 +7,7 @@ import play.api.mvc._
 import play.api.db._
 import java.sql.DriverManager
 import java.sql.Connection
+import java.sql.ResultSet
 import java.util.Date
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
@@ -19,7 +20,7 @@ case object ChatMessage{
 }
 
 case class ChatModel @Inject()(db: Database){
-  println("hi")
+
   /** MYSQL**/
   val conn = db.getConnection()
   val stmt = conn.createStatement()
@@ -52,18 +53,22 @@ case class ChatModel @Inject()(db: Database){
     val stmt_select = conn.createStatement()
     val resultSet = stmt_select.executeQuery("SELECT * FROM chatroom WHERE roomId = '" 
                                             + id + "' ORDER BY time DESC") 
-  
-    var history: List[ChatMessage] = List()
-   
-    while ( resultSet.next() ) {
-        val text = resultSet.getString("text")
-        val user = resultSet.getString("user")
-        val roomId = resultSet.getInt("roomId")
-        val time = resultSet.getTimestamp("time").toLocalDateTime()
-        val chatMessage = ChatMessage(text, user, roomId, time)
-        history ::= (chatMessage)
+
+    def foldResultSet(resultSet: ResultSet, list: List[ChatMessage]) : List[ChatMessage] = {
+      if(resultSet.next()){
+        foldResultSet(resultSet, ChatMessage(
+          text = resultSet.getString("text"),
+          user = resultSet.getString("user"),
+          roomId = resultSet.getInt("roomId"),
+          time = resultSet.getTimestamp("time").toLocalDateTime()
+        ) :: list)
+      }
+      else
+        list
     }
-    history
+
+    foldResultSet(resultSet, List())
   }
+
 }
 

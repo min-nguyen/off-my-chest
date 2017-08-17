@@ -40,6 +40,7 @@ case class Incoming(msg: String) extends Msg
 //ChatRoomActor => ChatRoom
 case class AcknowledgeCon(username: String, user: ActorRef) extends Msg
 case class ToChatRoom(msg: String, user: String) extends Msg
+case object ReqHistoryRoom
 //ChatRoom => ChatRoomActor
 case class FromChatRoom(msg: String, user: String) extends Msg
 case object FinishHistory extends Msg //Indicate loading history has finished
@@ -52,9 +53,11 @@ case class RequestHistory(roomId: Int) extends Msg
 //Saves & Loads ChatRoom History
 case class ChatDB(chatModel: ChatModel) extends Actor{
     def receive: Receive = {
+        //Save message in db
         case SaveHistory(msg, user, roomId) => 
             val chatMsg: ChatMessage = ChatMessage.create(msg, user, roomId)
             chatModel.insertMessage(chatMsg)
+        ///Load history from db
         case RequestHistory(roomId) =>
             val history: List[ChatMessage] = chatModel.selectMessages(roomId)
             sender ! history
@@ -68,26 +71,38 @@ case object ChatDB{
 }
 
 case class ChatRoomActor(roomId: Int, chatRoom: ActorRef) extends Actor {
-    var history: List[ChatMessage] = List()
-    def receive: Receive = {
-        case Connected(outgoing) =>
-            context.become(reqUser(outgoing))
+    private var history: List[ChatMessage] = List()
+    def reqHistory(outgoing: ActorRef) = {
+        val fut = chatRoom ? ReqHistoryRoom
+        val result = Await.ready(fut, timeout.duration).value.get match{
+            case Success(history: List[ChatMessage]) => 
+                outgoing ! Json.toJson(history).toString
+            case Failure(e) => 
+                println("Err in history retrieval")
+        }
     }
-    def reqUser(outgoing: ActorRef): Receive = {
-        case Incoming(user) => 
-            chatRoom ! AcknowledgeCon(user, self)
+    implicit val timeout : Timeout = Timeout(5, TimeUnit.SECONDS);
+    def receive: Receive = {
+        //Establish outgoing client flow
+        case Connected(outgoing) =>
+            context.become(reqUsername(outgoing))
+    }
+    def reqUsername(outgoing: ActorRef): Receive = {
+        //Establish username and request history
+        case Incoming(user) => {
+            val fut = chatRoom ! AcknowledgeCon(user, self)
+            reqHistory(outgoing)
             context.become(connected(outgoing, user))
+        }
     }
     def connected(outgoing: ActorRef, user: String): Receive = {
+        //Forward message from ws to chatRoom
         case Incoming(msg) => 
             println("Child actor received " + msg)
             chatRoom ! ToChatRoom(msg, user)
+        //Forward message from chatRoom to ws
         case FromChatRoom(msg, user) =>
             outgoing ! user + ": " + msg
-        case x @ ChatMessage(msg, user, roomId, time) =>
-            history ::= x
-        case FinishHistory =>
-            outgoing ! Json.toJson(history).toString
     }
 }
 
@@ -99,12 +114,11 @@ case object ChatRoomActor{
 
 
 case class ChatRoom(roomId: Int, chatDB: ActorRef) extends Actor{
-    var users: List[ActorRef] = List()
+    private var users: List[ActorRef] = List()
     val id = roomId.toString()
     
-    
     def connectUser(user: ActorRef) = {
-        users = users ::: List(user)
+        users = user :: users
     }
     def loadHistory: List[ChatMessage] = {
         implicit val timeout : Timeout = Timeout(5, TimeUnit.SECONDS)
@@ -114,25 +128,24 @@ case class ChatRoom(roomId: Int, chatDB: ActorRef) extends Actor{
     }
     def receive: Receive = {
         case ReqChild => 
+            //Create child for new ws connection
             val child : ActorRef = context.actorOf(ChatRoomActor.props(users.length, self))
             sender ! child
-
         case ToChatRoom(msg, user) => 
+            //Store message in data base
             users.map (u => u ! FromChatRoom(msg,user))
             chatDB ! SaveHistory(msg, user, roomId)
         case AcknowledgeCon(username, userref) =>
             connectUser(userref)
-            //Load history to user
-            val history: List[ChatMessage] = loadHistory
-            history.map(msg => userref ! msg)
-            userref ! FinishHistory
             //Alert users of new connection
             users.map(u => u ! FromChatRoom(username + " has connected", "CHATROOM"))
-            println("New connection: " + username + " : " + users)
+            println("New connection: '" + username + "'")
+        case ReqHistoryRoom =>
+            //Load history to user
+            val history: List[ChatMessage] = loadHistory
+            sender ! history
         case msg => 
-            println(msg)
-            sender ! "You sent " + msg
-
+            println("Message not encapsulated in trait: " + msg)
     }
 }
 
@@ -151,7 +164,7 @@ class ChatController @Inject()(cc: ControllerComponents)
     implicit val timeout : Timeout = Timeout(5, TimeUnit.SECONDS)
     val chatModel = new ChatModel(db)
     val chatDB = actorSystem.actorOf(ChatDB.props(chatModel))
-    chatModel.selectMessages(3)
+   
     //Retrieve existing chatroom, or create new one
     def retrieveChatRoom(id: Int): ActorRef = { 
         implicit val timeout = Timeout(5 seconds)
@@ -163,9 +176,10 @@ class ChatController @Inject()(cc: ControllerComponents)
         val chatRoom: ActorRef = 
         if(res == null) {
             actorSystem.actorOf(ChatRoom.props(id, chatDB), "Chatroom:" + id.toString)
-        } 
-        else res
-        return chatRoom;
+        } else {
+            res
+        }
+        chatRoom;
     }
     //Wait for it to provide us a child actor ref
     def retrieveChatRoomActor(chatRoom: ActorRef): ActorRef = {
@@ -175,9 +189,8 @@ class ChatController @Inject()(cc: ControllerComponents)
     }
     def socket(id: Int) : WebSocket = WebSocket.accept[String, String] {
         request =>
-
-        val chatRoom = retrieveChatRoom(id)
         
+        val chatRoom = retrieveChatRoom(id)
         val chatRoomActor = retrieveChatRoomActor(chatRoom)
         //Create flow towards child actor
         val in = Sink.foreach[String](

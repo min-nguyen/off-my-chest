@@ -8,7 +8,7 @@ import play.api.data._
 import play.api.data.Forms._
 import java.sql.DriverManager
 import java.sql.Connection
-import models.IndexModel
+import models.HomeModel
 import models.PostInsert
 import models.PostRequest
 import models.Post
@@ -16,7 +16,7 @@ import play.api.libs.json._
 @Singleton
 class HomeController @Inject()(db: Database) extends Controller{
   import play.api.libs.json._
-  val index_model = new IndexModel(db);
+  val home_model = new HomeModel(db);
 
   def home() = Action { implicit request: Request[AnyContent] =>
     Ok(views.html.home())
@@ -30,7 +30,7 @@ class HomeController @Inject()(db: Database) extends Controller{
         PostRequest.postRequest.bindFromRequest.get
       }
     )
-    val post : Option[Post] = index_model.selectPost(body)
+    val post : Option[Post] = home_model.selectPost(body)
     Ok(post.toString())
    
   }
@@ -41,12 +41,12 @@ class HomeController @Inject()(db: Database) extends Controller{
         None
       },
       userData => {
-          Some(PostInsert.post.bindFromRequest.get)
+        Some(PostInsert.post.bindFromRequest.get)
       }
     )
     val insert = body match{
       case None => 
-      case Some(x) => if (x.post != "") index_model.insertPost(x) 
+      case Some(x) => if (x.post != "") home_model.insertPost(x) 
     }
     Redirect("/home")
   }

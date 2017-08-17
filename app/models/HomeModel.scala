@@ -39,7 +39,7 @@ case object PostRequest{
   )
 }
 
-case class IndexModel @Inject()(db: Database){
+case class HomeModel @Inject()(db: Database){
   
   /** MYSQL**/
   val conn = db.getConnection()
@@ -85,7 +85,7 @@ case class IndexModel @Inject()(db: Database){
   }
 }
 
-case object IndexModel{}
+case object HomeModel{}
 
 
 // object Users {
