@@ -1,0 +1,45 @@
+@(socketURL: String)
+
+
+<video id="video" width="640" height="480" autoplay></video>
+<button id="snap">Snap Photo</button>
+<canvas id="canvas" width="640" height="480"></canvas>
+
+
+<script>
+    // Grab elements, create settings, etc.
+    var video = document.getElementById('video');
+
+    // Get access to the camera!
+    if(navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+        // Not adding `{ audio: true }` since we only want video now
+        navigator.mediaDevices.getUserMedia({ video: true }).then(function(stream) {
+            video.src = window.URL.createObjectURL(stream);
+            video.play();
+        });
+    }
+    function ws(){
+        url = '@socketURL'
+        //Produced GET request to ws:localhost/chat/?id
+        var connection = new WebSocket(url);
+        openConnection(url)
+        function openConnection(url){
+            connection.onopen = function() {
+                console.log("open")
+                while(connection.OPEN)
+                    connection.send(video.src);
+            }
+        }
+        function closeConnection(){
+            if(connection != undefined){
+                connection.send()
+                connection.close()
+            }
+        }
+        connection.onclose = function(){
+            console.log("Connection closed")
+        }
+    }
+    ws()
+</script>
+

@@ -13,6 +13,7 @@ import models.PostInsert
 import models.PostRequest
 import models.Post
 import play.api.libs.json._
+import scala.concurrent.blocking
 @Singleton
 class HomeController @Inject()(db: Database) extends Controller{
   import play.api.libs.json._

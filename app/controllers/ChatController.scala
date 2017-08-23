@@ -1,29 +1,26 @@
 package controllers
+
 import java.sql.DriverManager
 import java.sql.Connection
 import java.net.URL
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.Executors
 import javax.inject._
-import play.api._
 import play.api.mvc._
 import play.api.db._
 import play.api.data._
 import play.api.libs.json._
-import play.api.libs.streams.ActorFlow
+import play.api.mvc.WebSocket.MessageFlowTransformer
 import akka.actor._
-import akka.actor.ActorSystem
-import akka.actor.ActorSelection
 import akka.stream.Materializer
 import akka.NotUsed
 import akka.stream.ActorMaterializer
 import akka.stream.scaladsl._
 import akka.http.scaladsl.model.ws.{Message, TextMessage}
-import akka.pattern.ask
 import akka.util.Timeout;
 import akka.actor.ActorIdentity;
 import akka.stream.OverflowStrategy
-import akka.pattern.AskableActorSelection;
-import scala.concurrent.ExecutionContext.Implicits.global
+import akka.pattern._
 import scala.util.{Success, Failure}
 import scala.concurrent._
 import scala.concurrent.Await
@@ -31,8 +28,10 @@ import scala.concurrent.Future
 import scala.concurrent.duration._
 import models.ChatMessage
 import models.ChatModel
-
+import models.Webcam
+import models.WebcamConnector
 sealed trait Msg
+
 
 //Controller => ChatRoomActor
 case class Connected(outgoing: ActorRef)
@@ -120,12 +119,18 @@ case class ChatRoom(roomId: Int, chatDB: ActorRef) extends Actor{
     def connectUser(user: ActorRef) = {
         users = user :: users
     }
-    def loadHistory: List[ChatMessage] = {
-        implicit val timeout : Timeout = Timeout(5, TimeUnit.SECONDS)
-        val history: Future[Any] = chatDB ? RequestHistory(roomId)
-        val result = Await.result(history, timeout.duration).asInstanceOf[List[ChatMessage]]
-        result
-    }
+    def loadHistory(sender: ActorRef) =
+        new Thread(new Runnable{
+            def run() {
+                implicit val timeout : Timeout = Timeout(5, TimeUnit.SECONDS)
+                val fut = chatDB ? RequestHistory(roomId)
+                val result  = Await.ready(fut, timeout.duration).value.get match{
+                    case Success(t: List[ChatMessage]) => t
+                    case Failure(e) => List()
+                }
+                sender ! result
+            }
+    }) 
     def receive: Receive = {
         case ReqChild => 
             //Create child for new ws connection
@@ -141,9 +146,8 @@ case class ChatRoom(roomId: Int, chatDB: ActorRef) extends Actor{
             users.map(u => u ! FromChatRoom(username + " has connected", "CHATROOM"))
             println("New connection: '" + username + "'")
         case ReqHistoryRoom =>
-            //Load history to user
-            val history: List[ChatMessage] = loadHistory
-            sender ! history
+            //Create new thread for non-blocking request handling
+            loadHistory(sender).start
         case msg => 
             println("Message not encapsulated in trait: " + msg)
     }
@@ -164,7 +168,9 @@ class ChatController @Inject()(cc: ControllerComponents)
     implicit val timeout : Timeout = Timeout(5, TimeUnit.SECONDS)
     val chatModel = new ChatModel(db)
     val chatDB = actorSystem.actorOf(ChatDB.props(chatModel))
-   
+    
+
+
     //Retrieve existing chatroom, or create new one
     def retrieveChatRoom(id: Int): ActorRef = { 
         implicit val timeout = Timeout(5 seconds)
@@ -179,7 +185,7 @@ class ChatController @Inject()(cc: ControllerComponents)
         } else {
             res
         }
-        chatRoom;
+        chatRoom
     }
     //Wait for it to provide us a child actor ref
     def retrieveChatRoomActor(chatRoom: ActorRef): ActorRef = {
@@ -191,22 +197,49 @@ class ChatController @Inject()(cc: ControllerComponents)
         request =>
         
         val chatRoom = retrieveChatRoom(id)
-        val chatRoomActor = retrieveChatRoomActor(chatRoom)
-        //Create flow towards child actor
+        val chatRoomActor : ActorRef = retrieveChatRoomActor(chatRoom)
+        //Create flow from ws towards child actor
         val in = Sink.foreach[String](
             s => chatRoomActor ! Incoming (s) 
         )
+        //Create flow from child actor, by creating new Source as actor ref, namely outActor
+        //Use Source 'outActor' as where we get our data from
+        //mapmaterializedvalue means we get our materialized actor as our Source, which is outActor
+        //and map it so that our ChatActor can have a reference to it and send it messages
         val out: Source[String, NotUsed] =
         Source.actorRef[String](10, OverflowStrategy.fail)
         .mapMaterializedValue{
             outActor => chatRoomActor ! Connected(outActor)
             NotUsed
         }
-        .map( outMsg => outMsg) 
-
+        //Returning this sink and source will automatically treat the Sink 'chatRoomActor' 
+        //as the destination of all of the client's sent messages, and the Source 'outActor' 
+        //as the client's source of data to receive.
+        //
         Flow.fromSinkAndSource(in, out)
-
     }
+    // def wc(id: Int) : WebSocket = WebSocket.accept[Frame, Frame] {
+    //     request => 
+    //     val serialization = SerializationExtension(actorSystem)
+    //     val serializer = serialization.findSerializerFor(Frame)
+    //     val in: Source[Frame, NotUsed]
+    //     WebcamConnector.run()
+        
+        // val chatRoom = retrieveChatRoom(id)
+        // val chatRoomActor : ActorRef = retrieveChatRoomActor(chatRoom)
+        // //Create flow towards child actor
+        // val in = Sink.foreach[String](
+        //     s => chatRoomActor ! Incoming (s) 
+        // )
+        // val out: Source[String, NotUsed] =
+        // Source.actorRef[String](10, OverflowStrategy.fail)
+        // .mapMaterializedValue{
+        //     outActor => chatRoomActor ! Connected(outActor)
+        //     NotUsed
+        // }
+        // .map( outMsg => outMsg) 
+        // Flow.fromSinkAndSource(in, out)
+    // }
 
     def index(id: Int) = Action { implicit request: Request[AnyContent] =>
         val socket = routes.ChatController.socket(id)

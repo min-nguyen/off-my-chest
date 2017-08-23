@@ -12,6 +12,10 @@ import java.util.Date
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 import play.api.libs.json._
+
+
+
+
 case class ChatMessage(text: String, user: String, roomId: Int, time: LocalDateTime)
 case object ChatMessage{
     def create(text: String, user: String, roomId: Int) = 
@@ -31,8 +35,8 @@ case class ChatModel @Inject()(db: Database){
                                   (text VARCHAR(255), user VARCHAR(255), 
                                   roomId INT(11), time DATETIME, 
                                   FOREIGN KEY (roomID) REFERENCES threads(entry))""")
-
-  def viewDB {
+  
+  def viewDB : Unit = {
     val resultSet = stmt.executeQuery("SELECT * FROM chatroom")
     while ( resultSet.next() ) {
           val text = resultSet.getString("text")
@@ -42,7 +46,7 @@ case class ChatModel @Inject()(db: Database){
     }
   }
   
-  def insertMessage(msg: ChatMessage) {
+  def insertMessage(msg: ChatMessage) : Unit = {
     val stmt_insert = conn.createStatement()
     stmt.executeUpdate("INSERT INTO chatroom (text, user, roomId, time) VALUES ('" 
                         + msg.text + "','" + msg.user + "','" + msg.roomId + "','" + msg.time + "')")
@@ -63,8 +67,10 @@ case class ChatModel @Inject()(db: Database){
           time = resultSet.getTimestamp("time").toLocalDateTime()
         ) :: list)
       }
-      else
+      else{
+        stmt_select.close()
         list
+      }
     }
 
     foldResultSet(resultSet, List())

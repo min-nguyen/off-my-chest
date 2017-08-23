@@ -40,8 +40,10 @@ var ws = function(){
         
     }
     function closeConnection(){
-        if(connection != undefined)
+        if(connection != undefined){
+            connection.send()
             connection.close()
+        }
     }
     connection.onclose = function(){
         console.log("Connection closed")
