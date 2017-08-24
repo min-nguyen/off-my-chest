@@ -12,7 +12,10 @@ libraryDependencies += guice
 libraryDependencies += "org.scalatestplus.play" %% "scalatestplus-play" % "3.1.0" % Test
 libraryDependencies += jdbc
 libraryDependencies += "mysql" % "mysql-connector-java" % "5.1.30"
-
+libraryDependencies ++= Seq(
+  "org.json4s" %% "json4s-jackson" % "3.2.11",
+  "org.json4s" %% "json4s-ext" % "3.2.11"
+)
 // Adds additional packages into Twirl
 //TwirlKeys.templateImports += "com.example.controllers._"
 
