@@ -3,43 +3,129 @@
 
 <video id="video" width="640" height="480" autoplay></video>
 <button id="snap">Snap Photo</button>
+<button id="sendOffer">Send Offer</button>
 <canvas id="canvas" width="640" height="480"></canvas>
 
-
+<script src="@routes.Assets.versioned("javascripts/jquery.js")"></script>
 <script>
     // Grab elements, create settings, etc.
     var video = document.getElementById('video');
-
+    var localStream;
+    var RTCpc = new RTCPeerConnection(config);
+    start();
+    
     // Get access to the camera!
-    if(navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
-        // Not adding `{ audio: true }` since we only want video now
-        navigator.mediaDevices.getUserMedia({ video: true }).then(function(stream) {
-            video.src = window.URL.createObjectURL(stream);
-            video.play();
-        });
-    }
-    function ws(){
-        url = '@socketURL'
-        //Produced GET request to ws:localhost/chat/?id
-        var connection = new WebSocket(url);
-        openConnection(url)
-        function openConnection(url){
-            connection.onopen = function() {
-                console.log("open")
-                while(connection.OPEN)
-                    connection.send(video.src);
-            }
-        }
-        function closeConnection(){
-            if(connection != undefined){
-                connection.send()
-                connection.close()
-            }
-        }
-        connection.onclose = function(){
-            console.log("Connection closed")
+    function start(){
+        if(navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+            // Not adding `{ audio: true }` since we only want video now
+            navigator.mediaDevices.getUserMedia({ 
+                    video: true,
+                    audio: true 
+                })
+                .then(function(stream) {
+                    video.src = window.URL.createObjectURL(stream);
+                    RTCpc.addStream(stream);
+                    localStream = stream;
+            });
+            var canvas = $("#canvas");
+            var ctx = canvas.get()[0].getContext('2d');
+            
+            timer = setInterval(
+                function () {
+                    ctx.drawImage(video, 0, 0, 320, 240);
+                    var data = canvas.get()[0].toDataURL('image/jpeg', 1.0);
+                    // console.log(data)
+                }, 250);
         }
     }
-    ws()
+
+    var config = {'iceServers': [{'urls': 'stun:stun.services.mozilla.com'}, {'urls': 'stun:stun.l.google.com:19302'}]};
+    
+
+    RTCpc.onicecandidate = function (event) {
+        console.log(event)
+        if(event.candidate) {
+            wsconnection.send(JSON.stringify(event.candidate));
+            console.log("sent")
+        }
+    }
+
+    console.log(RTCpc)
+    var wsconnection;
+    $('#sendOffer').on('click', function(){
+        sendOffer();
+    });
+    
+    //SOCKET
+    url = '@socketURL'
+    wsconnection = new WebSocket(url);
+    wsconnection.onopen = function(){
+        console.log("open")
+    }
+    wsconnection.onmessage = function(msg){
+        var data = JSON.parse(msg.data);
+        console.log(data)
+        switch(data.type){
+            case "offer":
+                console.log(data)
+                onOffer(data);
+                break;
+            case "answer":
+                onAnswer(data);
+                break;
+            default:
+                if(data.candidate)
+                    onCandidate(data);
+                break;
+        }
+    }
+    function closeConnection(){
+        if(wsconnection != undefined){
+            wsconnection.send()
+            wsconnection.close()
+        }
+    }
+    wsconnection.onclose = function(){
+        console.log("Connection closed")
+    }
+    //
+    //
+    function sendOffer(){
+        RTCpc.createOffer(function(offer){
+            wsconnection.send(JSON.stringify(offer));
+            console.log("Offer sent to server");
+        }, function(error) {
+            console.log(error);
+        }) 
+    }
+    //
+    function onAnswer(data){
+        alert("answer received")
+        RTCpc.setRemoteDescription(new RTCSessionDescription(data))
+    }
+    function onOffer(data){
+        alert("offer received")
+        RTCpc.setRemoteDescription(new RTCSessionDescription(data));
+        sendAnswer(data);
+    }
+    function onCandidate(data){
+        console.log("ICE CANDIDATE", data);
+        RTCpc.addIceCandidate(new RTCIceCandidate(data));
+    }
+    function sendAnswer(data){
+        RTCpc.createAnswer(function (answer) {
+                wsconnection.send(JSON.stringify(answer));
+                RTCpc.setLocalDescription(answer);
+            }, function(error){
+                console.log(error)
+            }
+        );
+    }
+
+    
+
+   
+    
+    
 </script>
 
