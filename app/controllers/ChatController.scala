@@ -170,22 +170,21 @@ class ChatController @Inject()(cc: ControllerComponents)
     val chatDB = actorSystem.actorOf(ChatDB.props(chatModel))
     
 
-
     //Retrieve existing chatroom, or create new one
     def retrieveChatRoom(id: Int): ActorRef = { 
         implicit val timeout = Timeout(5 seconds)
         val select = actorSystem.actorSelection("/user/Chatroom:" + id)
         val asker = new AskableActorSelection(select);
-        val fut  = asker.ask(Identify(1))
-        val identity =  Await.result(fut, timeout.duration).asInstanceOf[ActorIdentity]
-        val res = identity.getRef
-        val chatRoom: ActorRef = 
-        if(res == null) {
-            actorSystem.actorOf(ChatRoom.props(id, chatDB), "Chatroom:" + id.toString)
-        } else {
-            res
+        val fut = asker.ask(Identify(1))
+        Await.ready(fut, timeout.duration).value.get match{
+            case Success(identity: ActorIdentity) => 
+                if ((identity.getRef) != null) 
+                    identity.getRef
+                else
+                    actorSystem.actorOf(ChatRoom.props(id, chatDB), "Chatroom:" + id.toString)
+            case Failure(e) => 
+                actorSystem.actorOf(ChatRoom.props(id, chatDB), "Chatroom:" + id.toString)
         }
-        chatRoom
     }
     //Wait for it to provide us a child actor ref
     def retrieveChatRoomActor(chatRoom: ActorRef): ActorRef = {
@@ -218,28 +217,6 @@ class ChatController @Inject()(cc: ControllerComponents)
         //
         Flow.fromSinkAndSource(in, out)
     }
-    // def wc(id: Int) : WebSocket = WebSocket.accept[Frame, Frame] {
-    //     request => 
-    //     val serialization = SerializationExtension(actorSystem)
-    //     val serializer = serialization.findSerializerFor(Frame)
-    //     val in: Source[Frame, NotUsed]
-    //     WebcamConnector.run()
-        
-        // val chatRoom = retrieveChatRoom(id)
-        // val chatRoomActor : ActorRef = retrieveChatRoomActor(chatRoom)
-        // //Create flow towards child actor
-        // val in = Sink.foreach[String](
-        //     s => chatRoomActor ! Incoming (s) 
-        // )
-        // val out: Source[String, NotUsed] =
-        // Source.actorRef[String](10, OverflowStrategy.fail)
-        // .mapMaterializedValue{
-        //     outActor => chatRoomActor ! Connected(outActor)
-        //     NotUsed
-        // }
-        // .map( outMsg => outMsg) 
-        // Flow.fromSinkAndSource(in, out)
-    // }
 
     def index(id: Int) = Action { implicit request: Request[AnyContent] =>
         val socket = routes.ChatController.socket(id)

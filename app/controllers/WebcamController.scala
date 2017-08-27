@@ -50,26 +50,21 @@ class WebcamServer extends Actor{
         case RequestChild => 
           val child : ActorRef = context.actorOf(Props(new WebcamActor(self)))
           sender ! child
-        case ToServer(fromName, msg) => 
-          val jsvalue = Json.parse(msg)
+        case ToServer(fromName, msg) => {
           val ob = JSON.parseFull(msg)
           // PROCESS NAME
           ob.map(m => m match {
             case m1: Map[String, String] => {
-              val toName = (m1 get "name")
-              println(m1)
-              toName match {
-                case None => println ("ERROR")
-                case Some(toNameFound) => {
-                  // context.actorSelection("*") ! RequestName("hi")
+              (m1 get "name").map{
+                toNameFound =>
                   val future: Future[Any] = context.actorSelection("*") ? RequestName(toNameFound)
                   val toActorFound = Await.result(future, timeout.duration).asInstanceOf[ActorRef]
                   toActorFound ! FromServer(fromName, msg)
-                }
               }  
             }
             case _ => "NOPE"
           })
+        }
     }
 
     def parseType(rtctype: String, rtc: JsValue, name: String): Option[RTCsignal] = rtctype match {
@@ -91,7 +86,7 @@ class WebcamActor(server: ActorRef) extends Actor {
 
   println(actorName)
     def receive: Receive = {
-      case actor: ActorRef => println("I HAVE AN OUTPUT"); context.become(initialisedSource(actor))
+      case actor: ActorRef => context.become(initialisedSource(actor))
     }
     def initialisedSource(outActor: ActorRef): Receive = {
       case maybeName: String => {
@@ -103,9 +98,10 @@ class WebcamActor(server: ActorRef) extends Actor {
       }
     }
     def initialisedName(outActor: ActorRef, name: String): Receive = {
-      case RequestName(requestedName: String) => if (requestedName == name) sender ! self
+      case RequestName(requestedName: String) => {
+        if (requestedName == name) sender ! self
+      }
       case FromServer(fromName: String, msg: String) => {
-
         val ob = JSON.parseFull(msg)
         ob.map(m => m match {
           case m1: Map[String, String] => {
@@ -128,6 +124,11 @@ class WebcamController @Inject()(implicit actorSystem: ActorSystem, mat: Materia
     val socket = routes.WebcamController.socket(0)
     val url = socket.webSocketURL()
     Ok(views.html.webcam(url))
+  }
+
+  def test() = Action {
+    implicit request: Request[AnyContent] =>
+    Ok(views.html.webcamsender())
   }
 
   def retrieveChild: ActorRef = {

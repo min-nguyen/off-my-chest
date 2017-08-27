@@ -1,97 +1,74 @@
+
 @(socketURL: String)
 
-
-<video id="video" width="640" height="480" autoplay></video>
+<video id="localView" width="640" height="480" autoplay controls></video>
+<canvas id="canvas" width="640" height="480"></canvas>
+<video id="remoteView" width="640" height="480" autoplay></video>
 <button id="snap">Snap Photo</button>
 <input  id="remoteName" type = 'text'> </input>
 <button id="sendOffer">Send Offer</button>
 <input  id="localName" type = 'text'> </input>
 <button id="connect">Connect</button>
-<canvas id="canvas" width="640" height="480"></canvas>
+<button id='check'> PRESS ME </button>
+<button id='stream'> STREAM </button>
 
 <script src="@routes.Assets.versioned("javascripts/jquery.js")"></script>
 <script>
-    // Grab elements, create settings, etc.
-    var video = document.getElementById('video');
-    var localStream;
-    var RTCpc = new RTCPeerConnection(config);
-    start();
-    
-    // Get access to the camera!
-    function start(){
-        if(navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
-            // Not adding `{ audio: true }` since we only want video now
-            navigator.mediaDevices.getUserMedia({ 
-                    video: true,
-                    audio: true 
-                })
-                .then(function(stream) {
-                    video.src = window.URL.createObjectURL(stream);
-                    RTCpc.addStream(stream);
-                    localStream = stream;
-            });
-            var canvas = $("#canvas");
-            var ctx = canvas.get()[0].getContext('2d');
-            
-            timer = setInterval(
-                function () {
-                    ctx.drawImage(video, 0, 0, 320, 240);
-                    var data = canvas.get()[0].toDataURL('image/jpeg', 1.0);
-                    // console.log(data)
-                }, 250);
-        }
-    }
 
+    var localView = $('#localView');
+    var remoteView = $('#remoteView');
     var config = {'iceServers': [{'urls': 'stun:stun.services.mozilla.com'}, {'urls': 'stun:stun.l.google.com:19302'}]};
-    var remoteName = ""
-
-    function sendOffer(name){
-        RTCpc.createOffer(function(offer){
-            wsconnection.send(JSON.stringify({
-                type: offer,
-                name: name
-            }));
-            RTCpc.setLocalDescription(offer); 
-            console.log("Offer sent to server");
-        }, function(error) {
-            console.log(error);
-        }) 
-    }
-    function sendAnswer(data, name){
-        remoteName = name;
-        RTCpc.createAnswer(function (answer) {
-                wsconnection.send(JSON.stringify({
-                    name: name,
-                    type: answer
-                }));
-                RTCpc.setLocalDescription(answer);
-            }, function(error){
-                console.log(error)
-            }
-        );
-
+    var RTCpc;
+    $('#check').on('click', function(){
+        console.log(RTCpc.iceConnectionState)
+    })
+    $('#stream').on('click', function(){
+        console.log((localView.find('source')).attr('src'))
+    })
+   
+        console.log("START")
+        RTCpc = new RTCPeerConnection(config);
         RTCpc.onicecandidate = function (event) {
-        console.log(event)
-        if(event.candidate) {
-            wsconnection.send(JSON.stringify({
-                type: event.candidate,
-                name: remoteName
-            }));
+            console.log(event)
+            if(event.candidate) {
+                wsconnection.send(JSON.stringify({
+                    type: event.candidate,
+                    name: remoteName
+            }));}
             console.log("sent")
         }
-    }
-    }
-    console.log(RTCpc)
+        RTCpc.onaddstream = function(event){
+            console.log("Stream added")
+            console.log(event.stream)
+            remoteView.src = window.URL.createObjectURL(event.stream);
+        }
+        if(navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+            // Not adding `{ audio: true }` since we only want video now
+            console.log("HI");
+            navigator.webkitGetUserMedia({video: true}, function(stream){
+                localView.find('source').attr('src',URL.createObjectURL(stream));
+                RTCpc.addStream(stream);
+            }, function(error){
+                console.log(error)
+            })
+                    
+            
+        }
+    
+    var localName = "";
+    var remoteName = "";
+
     var wsconnection;
     $('#sendOffer').on('click', function(){
         remoteName = $('#remoteName').val();
         sendOffer(remoteName);
     });
-    var localName = "";
+    
     //SOCKET
     url = '@socketURL'
     $('#connect').on('click', function(){
         localName = $('#localName').val();
+        
         wsconnection = new WebSocket(url);
         wsconnection.onopen = function(){
             wsconnection.send(JSON.stringify({name: localName}))
@@ -101,6 +78,7 @@
             var type = RTCmessage.type.type;
             var data = RTCmessage.type;
             var name = RTCmessage.name;
+            console.log(data)
             switch(type){
                 case "offer":
                     console.log(data)
@@ -110,6 +88,7 @@
                     onAnswer(data, name);
                     break;
                 default:
+                    console.log(data)
                     if(data.candidate)
                         onCandidate(data, name);
                     break;
@@ -126,22 +105,55 @@
         }
     })
     
-    //
-    //
-    
-    //
+    function sendOffer(name){
+        remoteName = name;
+        dataChannel = RTCpc.createDataChannel('sendDataChannel');
+        RTCpc.createOffer(function(offer){
+            wsconnection.send(JSON.stringify({
+                type: offer,
+                name: name
+            }));
+            RTCpc.setLocalDescription(offer); 
+            console.log("Offer sent to server");
+        }, function(error) {
+            console.log(error);
+        }) 
+    }
+
+    function sendAnswer(data, name){
+        remoteName = name;
+        RTCpc.createAnswer(function (answer) {
+                wsconnection.send(JSON.stringify({
+                    name: name,
+                    type: answer
+                }));
+                RTCpc.setLocalDescription(answer);
+            }, function(error){
+                console.log(error)
+            }
+        );
+    }
     function onAnswer(data, name){
-        alert("answer received")
         RTCpc.setRemoteDescription(new RTCSessionDescription(data))
     }
+    
+    RTCpc.oniceconnectionstatechange = function(){
+        console.log(RTCpc.iceConnectionState)
+    }
+    
+    
     function onOffer(data, name){
         alert("offer received")
         RTCpc.setRemoteDescription(new RTCSessionDescription(data));
         sendAnswer(data, name);
     }
     function onCandidate(data, name){
-        console.log("ICE CANDIDATE", data);
+        console.log("ADDING CANDIDATE")
         RTCpc.addIceCandidate(new RTCIceCandidate(data));
+        wsconnection.send(JSON.stringify({
+                    name: name,
+                    type: data.candidate
+                }));
     }
     
 
