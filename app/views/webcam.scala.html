@@ -40,19 +40,19 @@
         RTCpc.onaddstream = function(event){
             console.log("Stream added")
             console.log(event.stream)
-            remoteView.src = window.URL.createObjectURL(event.stream);
+            remoteView.attr('src', window.URL.createObjectURL(event.stream));
+        
         }
         if(navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
             // Not adding `{ audio: true }` since we only want video now
             console.log("HI");
             navigator.webkitGetUserMedia({video: true}, function(stream){
-                localView.find('source').attr('src',URL.createObjectURL(stream));
+                localView.attr('src', window.URL.createObjectURL(stream))
+                console.log(localView)
                 RTCpc.addStream(stream);
             }, function(error){
                 console.log(error)
             })
-                    
-            
         }
     
     var localName = "";
