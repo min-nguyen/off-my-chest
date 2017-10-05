@@ -199,7 +199,7 @@ object Webcam {
          */
         grabFrame().foreach(onNext)
         if (totalDemand > 0) {
-          self ! Continue //!!!!!!!!!!ITS FUCKING THIS ONE. I cant do sender ! continue. Need a way of receiving frames??
+          self ! Continue //!
         }
       }
     }
